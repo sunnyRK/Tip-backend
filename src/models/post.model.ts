@@ -1,79 +1,68 @@
-// import { Schema, model, Document } from 'mongoose';
+import mongoose, { Schema, model, Document, Types } from 'mongoose';
 
-// interface IPost extends Document {
-//   userId: Schema.Types.ObjectId;
-//   content: string;
-//   tips: {
-//     amount: number;
-//     from: string;
-//   }[];
-//   createdBy: Schema.Types.ObjectId;
-//   isSelfCreated: boolean;
-//   createdAt: Date;
-//   updatedAt: Date;
-// }
-
-// const postSchema = new Schema<IPost>({
-//   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-//   content: { type: String, required: true },
-//   tips: [
-//     {
-//       amount: { type: Number, required: true },
-//       from: { type: String, ref: 'User', required: true }
-//     }
-//   ],
-//   createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-//   isSelfCreated: { type: Boolean, required: true },
-//   createdAt: { type: Date, default: Date.now },
-//   updatedAt: { type: Date, default: Date.now }
-// });
-
-// const Post = model<IPost>('Post', postSchema);
-// export default Post;
-import { Schema, model, Document, Types } from 'mongoose';
-
+// Define interfaces for Tip and Post documents
 export interface ITip extends Document {
   amount: number;
-  from: Types.ObjectId;
+  from: mongoose.Types.ObjectId; // Reference to User model
+  token: string;
+  createdAt?: Date;
 }
 
 export interface IPost extends Document {
   userId: Types.ObjectId;
   content: string;
+  links: string[];
+  forOther: boolean;
+  otherUserProfile?: {
+    dappName: string;
+    profileImage: string;
+    profileName: string;
+  };
+  smartWalletAddress: string;
   tips: ITip[];
-  createdBy: Types.ObjectId;
-  isSelfCreated: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-
-  // Optional method to calculate total tip amount
-  calculateTotalTips(): number;
+  likes: Types.ObjectId[];
+  bookmarks: Types.ObjectId[];
+  totalTips: number;
+  calculateTotalTips: () => number;
 }
 
-const tipSchema = new Schema({
+// Define Tip schema
+const tipSchema = new Schema<ITip>({
   amount: { type: Number, required: true },
-  from: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+  from: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  token: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now },
 });
 
+
+// Define Post schema
 const postSchema = new Schema<IPost>({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   content: { type: String, required: true },
+  links: { type: [String], default: [] }, // Array of links
+  forOther: { type: Boolean, default: false },
+  otherUserProfile: {
+    dappName: { type: String, default: "" },
+    profileImage: { type: String, default: "" },
+    profileName: { type: String, default: "" },
+  },
+  smartWalletAddress: { type: String, default: "" },
   tips: [tipSchema],
-  createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  isSelfCreated: { type: Boolean, required: true },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
+  likes: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+  bookmarks: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+  totalTips: { type: Number, default: 0 }, // Field to store total tips amount
+}, {
+  timestamps: true,
 });
 
-// Method to calculate total tip amount
+// Method to calculate total tip amount and update totalTips field
 postSchema.methods.calculateTotalTips = function (): number {
-  let total = 0;
-  this.tips.forEach((tip: any) => {
-    total += tip.amount;
-  });
+  const total = this.tips.reduce((sum: number, tip: ITip) => sum + tip.amount, 0);
+  this.totalTips = total;
   return total;
 };
 
+// Export the Post model
 const Post = model<IPost>('Post', postSchema);
 
 export default Post;
