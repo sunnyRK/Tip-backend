@@ -1,3 +1,5 @@
+import { Schema } from "mongoose";
+
 const mongoose = require('mongoose');
 
 const linkedAccountSchema = new mongoose.Schema({
@@ -35,6 +37,8 @@ const userSchema = new mongoose.Schema({
   name: String,
   bio: String,
   smartAccountAddress: String,
+  followers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+  following: [{ type: Schema.Types.ObjectId, ref: 'User' }],
 });
 
 export const User = mongoose.model('User', userSchema);

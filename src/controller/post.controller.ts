@@ -1,20 +1,7 @@
 import { Request, Response } from 'express';
 import Post, { IPost, ITip } from '../models/post.model';
 import { User } from '../models/user.model';
-
-export const getProfile = async (req: any, res: Response) => {
-  try {
-    const user = req.user;
-    if (!user) {
-      return res.status(401).json({ message: 'Unauthorized: User not found' });
-    }
-
-    res.status(200).json({ user });
-  } catch (error) {
-    console.error('Error in getProfile:', error);
-    return res.status(500).json({ message: 'Internal Server Error' });
-  }
-};
+import mongoose from 'mongoose';
 
 // POST route to create a new post
 export const createPost = async (req: any, res: Response) => {
@@ -54,8 +41,6 @@ export const createPost = async (req: any, res: Response) => {
   }
 };
 
-import mongoose from 'mongoose';
-
 interface GetPostsQuery {
   page?: string;
   limit?: string;
@@ -84,7 +69,8 @@ export const getPosts = async (req: Request<{}, {}, {}, GetPostsQuery>, res: Res
     const posts = await Post.find(filters)
       .skip((pageNumber - 1) * limitNumber)
       .limit(limitNumber)
-      .populate('userId', 'name image') // Adjust according to what you want to populate
+      .populate('userId') // Adjust according to what you want to populate
+      .sort({ createdAt: -1 })
       .exec();
 
     const totalPosts = await Post.countDocuments(filters);
@@ -100,6 +86,44 @@ export const getPosts = async (req: Request<{}, {}, {}, GetPostsQuery>, res: Res
   }
 };
 
+export const getUserPosts = async (req: any, res: Response) => {
+  const { page = '1', limit = '10', dappName } = req.query;
+
+  const { _id } = req.user;
+  const userId = _id;
+  const pageNumber = parseInt(page, 10);
+  const limitNumber = parseInt(limit, 10);
+
+  const filters: any = {};
+
+  if (userId) {
+    filters.userId = new mongoose.Types.ObjectId(userId);
+  }
+
+  if (dappName) {
+    filters['otherUserProfile.dappName'] = dappName;
+  }
+
+  try {
+    const posts = await Post.find(filters)
+      .skip((pageNumber - 1) * limitNumber)
+      .limit(limitNumber)
+      .populate('userId') // Adjust according to what you want to populate
+      .sort({ createdAt: -1 })
+      .exec();
+
+    const totalPosts = await Post.countDocuments(filters);
+
+    res.json({
+      totalPages: Math.ceil(totalPosts / limitNumber),
+      currentPage: pageNumber,
+      totalPosts,
+      posts,
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching posts', error });
+  }
+};
 
 export const tipPost = async (req: any, res: Response) => {
   const { postId } = req.params;
@@ -137,8 +161,7 @@ export const tipPost = async (req: any, res: Response) => {
   }
 };
 
-// Backend: Express.js API for liking a post
-// export const likePost = async (req: Request<any, any, { postId: string }>, res: Response) => {
+// Liking a post
 export const likePost = async (req: any, res: Response) => {
   const { postId } = req.body;
   const { _id } = req.user; // Assuming _id is retrieved from authenticated user
@@ -168,8 +191,7 @@ export const likePost = async (req: any, res: Response) => {
   }
 };
 
-// Backend: Express.js API for disliking a post
-// export const dislikePost = async (req: Request<any, any, { postId: string }>, res: Response) => {
+// Disliking a post
 export const dislikePost = async (req: any, res: Response) => {
   const { postId } = req.body;
   const { _id } = req.user; // Assuming _id is retrieved from authenticated user
@@ -196,5 +218,74 @@ export const dislikePost = async (req: any, res: Response) => {
   } catch (error) {
     console.error('Error disliking post:', error);
     res.status(500).json({ message: 'Internal Server Error' });
+  }
+};
+// Add bookmark a post
+export const addBookmark = async (req: any, res: Response) => {
+  const { postId } = req.body;
+  const { _id } = req.user;
+
+  try {
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ message: 'Post not found' });
+    }
+
+    if (post.bookmarks.includes(_id)) {
+      return res.status(400).json({ message: 'You have already bookmarked this post' });
+    }
+
+    post.bookmarks.push(_id);
+    await post.save();
+
+    res.status(200).json({ message: 'Post liked successfully', post });
+  } catch (error) {
+    console.error('Error liking post:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+};
+
+// Remove bookmark a post
+export const removeBookmark = async (req: any, res: Response) => {
+  const { postId } = req.body;
+  const { _id } = req.user;
+
+  try {
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ message: 'Post not found' });
+    }
+
+    if (!post.bookmarks.includes(_id)) {
+      return res.status(400).json({ message: 'You have not bookmarked this post yet' });
+    }
+
+    post.bookmarks = post.bookmarks.filter(userId => userId.toString() !== _id.toString());
+    await post.save();
+
+    res.status(200).json({ message: 'Post disliked successfully', post });
+  } catch (error) {
+    console.error('Error disliking post:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+};
+
+// API endpoint to get all bookmarked posts of authenticated user
+export const getBookmarkedPosts = async (req: any, res: Response) => {
+  try {
+    const userId = req.user.id;
+
+    const bookmarkedPosts = await Post.find({ bookmarks: new mongoose.Types.ObjectId(userId) })
+      .populate('userId') // Adjust according to what you want to populate
+      .sort({ createdAt: -1 })
+      .exec();
+
+    res.json({
+      totalBookmarkedPosts: bookmarkedPosts.length,
+      bookmarkedPosts,
+    });
+  } catch (error) {
+    console.error('Error fetching bookmarked posts:', error);
+    res.status(500).json({ message: 'Error fetching bookmarked posts', error });
   }
 };
