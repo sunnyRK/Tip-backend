@@ -11,6 +11,7 @@ export interface ITip extends Document {
 export interface IPost extends Document {
   userId: Types.ObjectId;
   content: string;
+  imgUrl: string;
   links: string[];
   forOther: boolean;
   otherUserProfile?: {
@@ -39,6 +40,7 @@ const tipSchema = new Schema<ITip>({
 const postSchema = new Schema<IPost>({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   content: { type: String, required: true },
+  imgUrl: { type: String },
   links: { type: [String], default: [] }, // Array of links
   forOther: { type: Boolean, default: false },
   otherUserProfile: {

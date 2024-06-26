@@ -2,11 +2,12 @@ import { Request, Response } from 'express';
 import Post, { IPost, ITip } from '../models/post.model';
 import { User } from '../models/user.model';
 import mongoose from 'mongoose';
+import cloudinary from '../db/cloudinary';
 
 // POST route to create a new post
 export const createPost = async (req: any, res: Response) => {
   try {
-    const { content, links, forOther, otherUserProfile, smartWalletAddress, tips } = req.body;
+    const { content, links, forOther, otherUserProfile, smartWalletAddress, tips, imgUrl } = req.body;
     const { _id } = req.user;
 
     // Validate user exists
@@ -19,11 +20,12 @@ export const createPost = async (req: any, res: Response) => {
     const newPost = new Post({
       userId: _id,
       content,
-      links,
+      links: links || [],
       forOther,
       otherUserProfile: forOther ? otherUserProfile : null,
       smartWalletAddress,
       tips,
+      imgUrl,
       totalTips: 0, // Initialize total tips as 0
     });
 
@@ -287,5 +289,28 @@ export const getBookmarkedPosts = async (req: any, res: Response) => {
   } catch (error) {
     console.error('Error fetching bookmarked posts:', error);
     res.status(500).json({ message: 'Error fetching bookmarked posts', error });
+  }
+};
+
+
+
+
+
+
+export const uploadImage = async (req: Request, res: Response) => {
+  try {
+    console.log("Reched here")
+    let url;
+    if (req.body.picture) {
+      const userImage = await cloudinary.uploader.upload(req.body.picture, {
+        folder: "defi-posts",
+        public_id: 'posts'
+      });
+      url = userImage.secure_url;
+    }
+
+    res.status(200).json({ msg: "Image Uploaded", url });
+  } catch (error) {
+    res.status(500).json({ message: 'Error Uploading Image', error });
   }
 };
