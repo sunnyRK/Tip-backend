@@ -19,7 +19,8 @@ postRouter.put("/upload-img", checkPrivyToken, upload.single('picture'), uploadI
 
 postRouter.post("/", checkPrivyToken, createPost);
 
-postRouter.get("/", checkPrivyToken, getPosts);
+// postRouter.get("/", checkPrivyToken, getPosts);
+postRouter.get("/", getPosts);
 postRouter.get("/userPosts", checkPrivyToken, getUserPosts);
 
 postRouter.post('/tip/:postId', checkPrivyToken, tipPost);

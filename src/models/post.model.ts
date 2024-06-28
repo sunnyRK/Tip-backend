@@ -4,6 +4,7 @@ import mongoose, { Schema, model, Document, Types } from 'mongoose';
 export interface ITip extends Document {
   amount: number;
   from: mongoose.Types.ObjectId; // Reference to User model
+  to: mongoose.Types.ObjectId; // Reference to User model
   token: string;
   createdAt?: Date;
 }
@@ -24,17 +25,19 @@ export interface IPost extends Document {
   likes: Types.ObjectId[];
   bookmarks: Types.ObjectId[];
   totalTips: number;
-  calculateTotalTips: () => number;
+  calculateTotalTips: () => Promise<number>;
 }
 
 // Define Tip schema
 const tipSchema = new Schema<ITip>({
   amount: { type: Number, required: true },
   from: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  to: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   token: { type: String, required: true },
   createdAt: { type: Date, default: Date.now },
 });
 
+const PostTip = model<ITip>('PostTip', tipSchema);
 
 // Define Post schema
 const postSchema = new Schema<IPost>({
@@ -49,7 +52,7 @@ const postSchema = new Schema<IPost>({
     profileName: { type: String, default: "" },
   },
   smartWalletAddress: { type: String, default: "" },
-  tips: [tipSchema],
+  tips: [{ type: Schema.Types.ObjectId, ref: 'PostTip' }],
   likes: [{ type: Schema.Types.ObjectId, ref: 'User' }],
   bookmarks: [{ type: Schema.Types.ObjectId, ref: 'User' }],
   totalTips: { type: Number, default: 0 }, // Field to store total tips amount
@@ -58,8 +61,9 @@ const postSchema = new Schema<IPost>({
 });
 
 // Method to calculate total tip amount and update totalTips field
-postSchema.methods.calculateTotalTips = function (): number {
-  const total = this.tips.reduce((sum: number, tip: ITip) => sum + tip.amount, 0);
+postSchema.methods.calculateTotalTips = async function (): Promise<number> {
+  const tips = await PostTip.find({ _id: { $in: this.tips } });
+  const total = tips.reduce((sum, tip) => sum + tip.amount, 0);
   this.totalTips = total;
   return total;
 };
@@ -67,4 +71,4 @@ postSchema.methods.calculateTotalTips = function (): number {
 // Export the Post model
 const Post = model<IPost>('Post', postSchema);
 
-export default Post;
+export { Post, PostTip };

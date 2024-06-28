@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
-import Post, { IPost, ITip } from '../models/post.model';
 import { User } from '../models/user.model';
 import mongoose from 'mongoose';
 import cloudinary from '../db/cloudinary';
+import { Post, PostTip } from '../models/post.model';
 
 // POST route to create a new post
 export const createPost = async (req: any, res: Response) => {
@@ -72,6 +72,7 @@ export const getPosts = async (req: Request<{}, {}, {}, GetPostsQuery>, res: Res
       .skip((pageNumber - 1) * limitNumber)
       .limit(limitNumber)
       .populate('userId') // Adjust according to what you want to populate
+      .populate('tips') // Adjust according to what you want to populate
       .sort({ createdAt: -1 })
       .exec();
 
@@ -126,11 +127,14 @@ export const getUserPosts = async (req: any, res: Response) => {
     res.status(500).json({ message: 'Error fetching posts', error });
   }
 };
-
 export const tipPost = async (req: any, res: Response) => {
   const { postId } = req.params;
-  const { amount, token } = req.body;
-  const { _id } = req.user;
+  const { userId, amount, token } = req.body;
+  const { _id } = req.user; // Assuming req.user contains the authenticated user's ID
+
+  if (!mongoose.Types.ObjectId.isValid(postId)) {
+    return res.status(400).json({ message: 'Invalid post ID' });
+  }
 
   try {
     // Find the post by postId
@@ -140,18 +144,22 @@ export const tipPost = async (req: any, res: Response) => {
     }
 
     // Create a new tip
-    const newTip: any = {
+    const newTip = new PostTip({
       amount,
       from: _id,
+      to: userId,
       token,
-      createdAt: new Date(),
-    };
+    });
+
+    // Save the new tip
+    await newTip.save();
 
     // Add the tip to the post
-    post.tips.push(newTip);
+    const newTipId: any = newTip._id;
+    post.tips.push(newTipId);
 
     // Update total tips on the post
-    post.totalTips = post.calculateTotalTips();
+    await post.calculateTotalTips();
 
     // Save the updated post
     await post.save();
@@ -293,13 +301,8 @@ export const getBookmarkedPosts = async (req: any, res: Response) => {
 };
 
 
-
-
-
-
 export const uploadImage = async (req: Request, res: Response) => {
   try {
-    console.log("Reched here")
     let url;
     if (req.body.picture) {
       const userImage = await cloudinary.uploader.upload(req.body.picture, {

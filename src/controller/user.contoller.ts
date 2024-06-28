@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import { User } from "../models/user.model";
 import mongoose, { Types } from "mongoose";
+import cloudinary from "../db/cloudinary";
+import { PostTip } from "../models/post.model";
 
 export const createUser = async (req: Request, res: Response) => {
     try {
@@ -58,13 +60,20 @@ export const getRandomUsers = async (req: Request, res: Response) => {
     try {
         const userId: any = req.query.user;
 
-        let matchStage = {};
+        // Fetch the list of users the specified user is following
+        let followedUsers: any = [];
         if (userId) {
-            matchStage = { _id: { $ne: new mongoose.Types.ObjectId(userId) } };
+            const user = await User.findById(userId).select('following');
+            if (user) {
+                followedUsers = user.following.map((id: mongoose.Types.ObjectId) => id.toString());
+            }
         }
 
+        // Add the specified user to the list of excluded users
+        followedUsers.push(userId);
+
         const randomUsers = await User.aggregate([
-            { $match: matchStage },   // Exclude the specified user if userId is provided
+            { $match: { _id: { $nin: followedUsers.map((id: any) => new mongoose.Types.ObjectId(id)) } } }, // Exclude followed users and the specified user
             { $sample: { size: 5 } }  // Sample 5 random users
         ]);
 
@@ -105,12 +114,161 @@ export const toggleFollowUser = async (req: any, res: Response) => {
         await currentUser.save();
         await targetUser.save();
 
+        const updatedUser = await User.findById(currentUserId);
+
+
         res.status(200).json({
             message: isFollowing ? 'Unfollowed user successfully' : 'Followed user successfully',
             isFollowing: !isFollowing,
+            updatedUser
         });
     } catch (error) {
         console.error('Error toggling follow status:', error);
         res.status(500).json({ message: 'Internal Server Error' });
     }
+};
+
+
+export const getFollowers = async (req: any, res: Response) => {
+    try {
+        const userId = req.user._id;
+
+        const user = await User.findById(userId).populate('followers');
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.status(200).json({ followers: user.followers });
+    } catch (error) {
+        console.error('Error fetching followers:', error);
+        res.status(500).json({ message: 'Error fetching followers', error });
+    }
+};
+
+
+export const getFollowing = async (req: any, res: Response) => {
+    try {
+        const userId = req.user._id;
+
+        const user = await User.findById(userId).populate('following');
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.status(200).json({ following: user.following });
+    } catch (error) {
+        console.error('Error fetching following:', error);
+        res.status(500).json({ message: 'Error fetching following', error });
+    }
+};
+
+
+export const uploadProfileImage = async (req: any, res: Response) => {
+    try {
+        const userId = req.user._id;
+
+        const { picture } = req.body;
+
+        if (!picture) {
+            return res.status(400).json({ error: 'Image URL is required' });
+        }
+
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        let url;
+        if (req.body.picture) {
+            const userImage = await cloudinary.uploader.upload(req.body.picture, {
+                folder: "defi-posts",
+                public_id: 'posts'
+            });
+            url = userImage.secure_url;
+        }
+
+        user.image = url;
+        await user.save();
+        res.status(200).json({ msg: "Image Uploaded", url });
+    } catch (error) {
+        console.error('Error updating user image:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+
+export const getUserTipStats = async (req: any, res: Response) => {
+    const userId = req.user._id;
+
+    try {
+        // Get all tips given by the user
+        const tipsGiven = await PostTip.find({ from: userId }).populate('to');
+
+        // Calculate total tips received by the user
+        const tipsReceived = await PostTip.find({ to: userId });
+
+        const totalTipsReceived = tipsReceived.reduce((total, tip) => total + tip.amount, 0);
+        const totalTipsGiven = tipsGiven.reduce((total, tip) => total + tip.amount, 0);
+
+        res.status(200).json({
+            tipsGiven,
+            totalTipsGiven,
+            totalTipsReceived
+        });
+    } catch (error) {
+        console.error('Error fetching user tip stats:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+};
+
+
+export const updateUserProfile = async (req: any, res: Response) => {
+    const userId = req.user._id;
+    const { name, bio, image } = req.body;
+
+    try {
+        // Find the user by userId and update the provided fields
+        const user = await User.findByIdAndUpdate(
+            userId,
+            { name, bio, image },
+            { new: true } // Return the updated document
+        );
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.status(200).json({ message: 'Profile updated successfully', user });
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+};
+
+
+export const searchUsers = async (req: Request, res: Response) => {
+  const { query } = req.query;
+
+  if (!query) {
+    return res.status(400).json({ message: 'Query string is required' });
+  }
+
+  try {
+    const users = await User.find({
+      $or: [
+        { bio: { $regex: query, $options: 'i' } },
+        { name: { $regex: query, $options: 'i' } },
+        { smartAccountAddress: { $regex: query, $options: 'i' } },
+        { 'wallet.address': { $regex: query, $options: 'i' } }
+      ]
+    }); // Select only the required fields
+
+    res.json(users);
+  } catch (error) {
+    console.error('Error searching users:', error);
+    res.status(500).json({ message: 'Error searching users', error });
+  }
 };
