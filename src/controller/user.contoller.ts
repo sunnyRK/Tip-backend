@@ -4,7 +4,7 @@ import mongoose, { Types } from "mongoose";
 import cloudinary from "../db/cloudinary";
 import { PostTip } from "../models/post.model";
 
-export const createUser = async (req: Request, res: Response) => {
+export const createUser1 = async (req: Request, res: Response) => {
     try {
         const { id, createdAt, linkedAccounts, wallet, smartAccountAddress } = req.body;
 
@@ -45,6 +45,160 @@ export const createUser = async (req: Request, res: Response) => {
         res.status(500).json({ error: 'Failed to create user', message: error });
     }
 };
+
+export const createUser2 = async (req: Request, res: Response) => {
+    try {
+        const { id, createdAt, linkedAccounts, wallet, smartAccountAddress } = req.body;
+
+        // Check if user already exists
+        const existingUser = await User.findOne({ did: id });
+
+        if (existingUser) {
+            const farcasterAccount = existingUser.linkedAccounts.find((account: any) => account.type === 'farcaster');
+            if (farcasterAccount) {
+                // Set a cookie indicating the user is logged in
+                // res.cookie('privy-token', 'login_true', { httpOnly: true, secure: true });
+                res.cookie('login_true', { httpOnly: true, secure: true });
+                return res.status(200).json({ message: 'User already exists and linked Farcaster', alreadyReg: true });
+            } else {
+                return res.status(200).json({ message: 'User already exists but needs to link Farcaster', alreadyReg: false });
+            }
+        }
+
+        // Determine user image, name, and bio with default values
+        let image = "";
+        let name = "";
+        let bio = "";
+
+        const farcasterAccount = linkedAccounts.find((account: any) => account.type === 'farcaster');
+
+        if (farcasterAccount) {
+            image = farcasterAccount.pfp || "";
+            name = farcasterAccount.displayName || "";
+            bio = farcasterAccount.bio || "";
+        }
+
+        const newUser = new User({
+            did: id,
+            createdAt,
+            linkedAccounts,
+            wallet,
+            image,
+            name,
+            bio,
+            smartAccountAddress
+        });
+
+        const savedUser = await newUser.save();
+
+        // Set a cookie indicating the user is logged in
+        // res.cookie('privy-token', 'login_true', { httpOnly: true, secure: true });
+        res.cookie('login_true', { httpOnly: true, secure: true });
+        res.status(201).json({ savedUser, alreadyReg: false });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to create user', message: error });
+    }
+};
+
+
+export const createUser = async (req: Request, res: Response) => {
+    try {
+        const { id, createdAt, linkedAccounts, wallet, smartAccountAddress } = req.body;
+
+        console.log(req.body)
+        // Check if user already exists
+        let user = await User.findOne({ did: id });
+
+        if (user) {
+            res.cookie('login-token', user._id, { httpOnly: true });
+            return res.status(200).json({ message: 'User already exists', alreadyReg: true });
+        }
+
+        user = new User({
+            did: id,
+            createdAt,
+            linkedAccounts,
+            wallet,
+            smartAccountAddress
+        });
+
+        const savedUser = await user.save();
+
+        // res.cookie('user-id', savedUser._id, { httpOnly: true });
+        return res.status(201).json({ savedUser, alreadyReg: false });
+    } catch (error) {
+        console.error('Error in connect-wallet:', error);
+        return res.status(500).json({ error: 'Failed to connect wallet', message: error });
+    }
+};
+
+export const loginUser = async (req: Request, res: Response) => {
+    const { id, createdAt, linkedAccounts, wallet, smartAccountAddress } = req.body;
+
+    try {
+        // Check if user already exists
+        let user = await User.findOne({ did: id });
+
+        if (!user) {
+            res.cookie('login-token', user._id, { httpOnly: true });
+            return res.status(200).json({ message: 'User not exist, Sign up first.', alreadyReg: false });
+        }
+
+        return res.status(201).json({ user, alreadyReg: true });
+    } catch (error) {
+        console.error('Error in connect-wallet:', error);
+        return res.status(500).json({ error: 'Failed to connect wallet', message: error });
+    }
+};
+
+export const addFarcasterAccount = async (req: any, res: Response) => {
+    try {
+        const userId = req.user._id;
+        const { farcasterAccount } = req.body;
+
+        console.log(req.body)
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        user.linkedAccounts = farcasterAccount.linkedAccounts;
+        user.name = farcasterAccount.farcaster.username || "";
+        user.bio = farcasterAccount.farcaster.bio || "";
+        user.image = farcasterAccount.farcaster.pfp || "";
+
+        // {
+        //     "fid": 689453,
+        //     "ownerAddress": "0x9dECa0ee05776B629aB6DCEbAE00547E683EC025",
+        //     "displayName": "Akshay",
+        //     "username": "akshayjangra",
+        //     "bio": "I am software developer",
+        //     "pfp": "https://imagedelivery.net/BXluQx4ige9GuW0Ia56BHw/20ea16ea-d8b9-4a95-7d3b-512cf9f9f900/original"
+        // }
+
+        const updatedUser = await user.save();
+
+        res.cookie('login-token', updatedUser._id, { httpOnly: true });
+        return res.status(200).json({ updatedUser });
+    } catch (error) {
+        console.error('Error in addFarcasterAccount:', error);
+        return res.status(500).json({ error: 'Failed to add Farcaster account', message: error });
+    }
+};
+
+
+export const logOut = async (req: any, res: Response) => {
+    try {
+        res.clearCookie('login-token');
+        return res.status(200).json({ message: 'Logout successful' });
+    } catch (error) {
+        console.error('Error in logout:', error);
+        return res.status(500).json({ error: 'Failed to logout', message: error });
+    }
+};
+
+
 
 export const getUser = async (req: any, res: Response) => {
     try {
@@ -250,25 +404,25 @@ export const updateUserProfile = async (req: any, res: Response) => {
 
 
 export const searchUsers = async (req: Request, res: Response) => {
-  const { query } = req.query;
+    const { query } = req.query;
 
-  if (!query) {
-    return res.status(400).json({ message: 'Query string is required' });
-  }
+    if (!query) {
+        return res.status(400).json({ message: 'Query string is required' });
+    }
 
-  try {
-    const users = await User.find({
-      $or: [
-        { bio: { $regex: query, $options: 'i' } },
-        { name: { $regex: query, $options: 'i' } },
-        { smartAccountAddress: { $regex: query, $options: 'i' } },
-        { 'wallet.address': { $regex: query, $options: 'i' } }
-      ]
-    }); // Select only the required fields
+    try {
+        const users = await User.find({
+            $or: [
+                { bio: { $regex: query, $options: 'i' } },
+                { name: { $regex: query, $options: 'i' } },
+                { smartAccountAddress: { $regex: query, $options: 'i' } },
+                { 'wallet.address': { $regex: query, $options: 'i' } }
+            ]
+        }); // Select only the required fields
 
-    res.json(users);
-  } catch (error) {
-    console.error('Error searching users:', error);
-    res.status(500).json({ message: 'Error searching users', error });
-  }
+        res.json(users);
+    } catch (error) {
+        console.error('Error searching users:', error);
+        res.status(500).json({ message: 'Error searching users', error });
+    }
 };

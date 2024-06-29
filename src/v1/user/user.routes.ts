@@ -1,6 +1,6 @@
 import express from "express";
 import { checkPrivyToken } from "../../middleware/checkPrivyToken";
-import { createUser, getFollowers, getFollowing, getRandomUsers, getUser, getUserTipStats, searchUsers, toggleFollowUser, updateUserProfile, uploadProfileImage } from "../../controller/user.contoller";
+import { addFarcasterAccount, createUser, getFollowers, getFollowing, getRandomUsers, getUser, getUserTipStats, logOut, loginUser, searchUsers, toggleFollowUser, updateUserProfile, uploadProfileImage } from "../../controller/user.contoller";
 import multer from 'multer';
 
 const storage = multer.memoryStorage();
@@ -12,6 +12,10 @@ const userRouter = express.Router();
 
 
 userRouter.post("/", createUser);
+userRouter.post("/login", loginUser);
+userRouter.post("/link-farcaster", checkPrivyToken, addFarcasterAccount);
+userRouter.post("/logout", logOut);
+
 userRouter.get("/search", searchUsers);
 
 userRouter.get("/", checkPrivyToken, getUser);
