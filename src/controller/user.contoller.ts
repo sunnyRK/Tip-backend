@@ -105,13 +105,17 @@ export const createUser = async (req: Request, res: Response) => {
     try {
         const { id, createdAt, linkedAccounts, wallet, smartAccountAddress } = req.body;
 
-        console.log(req.body)
         // Check if user already exists
         let user = await User.findOne({ did: id });
 
         if (user) {
-            res.cookie('login-token', user._id, { httpOnly: true });
-            return res.status(200).json({ message: 'User already exists', alreadyReg: true });
+
+            res.cookie('login-token', user._id, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'strict',
+            });
+            return res.status(200).json({ message: 'User already exists', user: user, alreadyReg: true });
         }
 
         user = new User({
@@ -124,8 +128,7 @@ export const createUser = async (req: Request, res: Response) => {
 
         const savedUser = await user.save();
 
-        // res.cookie('user-id', savedUser._id, { httpOnly: true });
-        return res.status(201).json({ savedUser, alreadyReg: false });
+        return res.status(201).json({ user: savedUser, alreadyReg: false });
     } catch (error) {
         console.error('Error in connect-wallet:', error);
         return res.status(500).json({ error: 'Failed to connect wallet', message: error });
@@ -168,19 +171,14 @@ export const addFarcasterAccount = async (req: any, res: Response) => {
         user.bio = farcasterAccount.farcaster.bio || "";
         user.image = farcasterAccount.farcaster.pfp || "";
 
-        // {
-        //     "fid": 689453,
-        //     "ownerAddress": "0x9dECa0ee05776B629aB6DCEbAE00547E683EC025",
-        //     "displayName": "Akshay",
-        //     "username": "akshayjangra",
-        //     "bio": "I am software developer",
-        //     "pfp": "https://imagedelivery.net/BXluQx4ige9GuW0Ia56BHw/20ea16ea-d8b9-4a95-7d3b-512cf9f9f900/original"
-        // }
-
         const updatedUser = await user.save();
 
-        res.cookie('login-token', updatedUser._id, { httpOnly: true });
-        return res.status(200).json({ updatedUser });
+        res.cookie('login-token', user._id, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+        });
+        return res.status(200).json({ user: updatedUser });
     } catch (error) {
         console.error('Error in addFarcasterAccount:', error);
         return res.status(500).json({ error: 'Failed to add Farcaster account', message: error });
